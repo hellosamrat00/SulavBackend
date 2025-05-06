@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Booking, HairService
+from .models import User, Booking, HairService, FAQ
 
 
 class ChatRequestSerializer(serializers.Serializer):
@@ -40,3 +40,8 @@ class HairServiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = HairService
         fields = ['id', 'name', 'price']
+        
+class FAQSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FAQ
+        fields = ['id', 'question', 'answer', 'created_at', 'updated_at']

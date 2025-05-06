@@ -2,11 +2,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import ChatRequestSerializer, UserSerializer, LoginSerializer, BookingSerializer, HairServiceSerializer
+from .serializers import ChatRequestSerializer, UserSerializer, LoginSerializer, BookingSerializer, HairServiceSerializer, FAQSerializer
 from .gemini_bot import get_bot_response
-from .models import User, Booking,HairService
+from .models import User, Booking,HairService, FAQ
 import logging
-from django.db.models import Sum, Count
+from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 
 
@@ -145,3 +145,44 @@ class SalesOverviewView(APIView):
             for sale in sales
         ]
         return Response(data)
+    
+class FAQListCreateView(APIView):
+    def get(self, request):
+        faqs = FAQ.objects.all().order_by('-created_at')
+        serializer = FAQSerializer(faqs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = FAQSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class FAQDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            faq = FAQ.objects.get(pk=pk)
+        except FAQ.DoesNotExist:
+            return Response({"error": "FAQ not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FAQSerializer(faq)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        try:
+            faq = FAQ.objects.get(pk=pk)
+        except FAQ.DoesNotExist:
+            return Response({"error": "FAQ not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FAQSerializer(faq, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        try:
+            faq = FAQ.objects.get(pk=pk)
+        except FAQ.DoesNotExist:
+            return Response({"error": "FAQ not found"}, status=status.HTTP_404_NOT_FOUND)
+        faq.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

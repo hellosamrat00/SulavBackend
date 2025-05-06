@@ -5,20 +5,19 @@ import logging
 from django.conf import settings
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from .models import HairService, Booking
+from .models import HairService, Booking, FAQ
 from langchain.schema import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langdetect import detect, DetectorFactory
 from google.cloud import translate_v2 as translate
 
-# Ensure consistent language detection
+
 DetectorFactory.seed = 0
 
 logger = logging.getLogger(__name__)
 
 os.environ["GOOGLE_API_KEY"] = ""
 
-# Initialize Google Cloud Translate client
 try:
     translate_client = translate.Client.from_service_account_json(os.path.join(settings.BASE_DIR, 'app.json'))
 except Exception as e:
@@ -199,8 +198,6 @@ def book_appointment_on_calendar(summary, start_time, user, language='en'):
 
 def get_bot_response(user_input, request):
     logger.info(f"get_bot_response: User: {request.user}, Authenticated: {request.user.is_authenticated}, Input: {user_input}")
-    
-    # Detect language with fallback
     try:
         language = detect(user_input)
         logger.info(f"Detected language: {language}")
@@ -209,6 +206,9 @@ def get_bot_response(user_input, request):
         language = 'en'
 
     services_text = get_all_services_text(language)
+    faqs = FAQ.objects.all()
+    faqs_text = "\n".join([f"Q: {faq.question}\nA: {faq.answer}" for faq in faqs])
+
     system_prompt = SystemMessage(content=translate_text(f"""
 You are a helpful barbershop assistant. Respond in the user's language and only answer questions about:
 - Haircuts
@@ -219,6 +219,8 @@ You are a helpful barbershop assistant. Respond in the user's language and only 
 
 Here are the current services and prices:\n{services_text}
 
+Here are the FAQs to assist with common questions:\n{faqs_text}
+
 If asked anything unrelated, reply with:
 "I'm here to assist with barbershop-related questions only. How can I help with your grooming needs?"
 """, language))
@@ -228,19 +230,13 @@ If asked anything unrelated, reply with:
         system_prompt,
         HumanMessage(content=user_input)
     ]
-    
-    # Attempt to extract time and book appointment
     appointment_time = extract_time_from_input(user_input, language)
     if appointment_time:
         booking_response = book_appointment_on_calendar("Barbershop Appointment", appointment_time, request.user, language)
-        logger.info(f"Booking response: {booking_response}")
         return booking_response
     else:
-        # Provide feedback if time extraction fails
-        logger.warning(f"Failed to extract time from input: {user_input}")
         error_message = "Sorry, I couldn't understand the time for your appointment. Please specify the time clearly, e.g., '3 PM' or '15:00'."
         translated_error = translate_text(error_message, language)
-        # Still process the input with Gemini for non-booking queries
         try:
             response = chat.invoke(messages)
             return translate_text(response.content, language)
